@@ -1,5 +1,109 @@
 #!/usr/bin/env python3
 
-from pypgtable import table,
+from time import time
+from random import getrandbits, random
+from pypgtable import table
+from tqdm import trange
+from numpy import zeros, float
+from pickle import dump, HIGHEST_PROTOCOL, load
+from bokeh.io import show
+from bokeh.models import BasicTicker, ColorBar, LinearColorMapper, PrintfTickFormatter, ColumnDataSource
+from bokeh.plotting import figure
+from bokeh.palettes import Turbo256
+from math import pi
+from os.path import isfile
 
-config =
+config = {
+    'database': {
+        'dbname': 'experiment'
+    },
+    'schema': {
+        'idx': {
+            'type': 'BIGINT',
+            'nullable': False,
+            'index': 'btree'
+        },
+        'p': {
+            'type': 'DOUBLE PRECISION',
+            'nullable': False
+        }
+    },
+    'table': 'weighted_random_subsample',
+    'delete_table': True,
+    'create_db': True,
+    'create_table': True
+}
+
+
+# See README.md for variable definitions
+N = 25
+M = 25
+
+UNIFORM_SELECTION = (
+    'ORDER BY RANDOM() LIMIT {sample}',
+    'TABLESAMPLE SYSTEM({fraction})',
+    'TABLESAMPLE BERNOULLI({fraction})'
+)
+
+if not isfile('data.pkl'):
+    results = {}
+    with open('data.csv', 'w') as fileptr:
+        fileptr.write('Uniform selection benchmark.\n\n')
+        for s in UNIFORM_SELECTION:
+            TABLE = table(config)
+            results[s] = zeros((M,N), dtype=float)
+            fileptr.write(f'Query: {s}\n,m\nn,' + ','.join((str(2**m) for m in range(M))) + '\n')
+            for _n in trange(N, desc=f'{s}', ascii='         *'):
+                n = 2**_n
+                fileptr.write(f'{n},')
+                TABLE.insert(({'idx': getrandbits(63), 'p': random()} for _ in range(n // 2)))
+                for _m in trange(M, desc=f'n = {n}', leave=False, ascii='         *'):
+                    m = 2**_m
+                    if m <= n:
+                        start = time()
+                        for i in trange(100, desc=f'm = {m}', leave=False, ascii='         *'):
+                            data = TABLE.raw.select(s, {'sample': m, 'fraction': m / n})
+                        duration = (time() - start) / 100
+                        fileptr.write(f'{duration},')
+                fileptr.write('\n')
+            fileptr.write('\n')
+
+    with open('data.pkl', 'wb') as fileptr:
+        dump(results, fileptr, HIGHEST_PROTOCOL)
+else:
+    with open('data.pkl', 'rb') as fileptr:
+        results = load(fileptr)
+
+data = {
+    'x': list(range(N)),
+    'y': list(range(M)),
+    'z': results[UNIFORM_SELECTION[0]]
+}
+source = ColumnDataSource(data=data)
+
+TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
+mapper = LinearColorMapper(palette=Turbo256, low=min((min(r) for r in results.values())), high=max((max(r) for r in results.values())))
+p = figure(title="Chart",
+           x_range=data['x'], y_range=data['y'],
+           x_axis_location="above", plot_width=900, plot_height=900,
+           tools=TOOLS, toolbar_location='below')
+
+p.grid.grid_line_color = None
+p.axis.axis_line_color = None
+p.axis.major_tick_line_color = None
+p.axis.major_label_text_font_size = "7px"
+p.axis.major_label_standoff = 0
+p.xaxis.major_label_orientation = pi / 3
+
+p.rect(x="x", y="y", width=1, height=1,
+       source=source,
+       fill_color={'field': 'z', 'transform': mapper},
+       line_color=None)
+
+color_bar = ColorBar(color_mapper=mapper, major_label_text_font_size="7px",
+                     ticker=BasicTicker(desired_num_ticks=len(Turbo256)),
+                     formatter=PrintfTickFormatter(format="%d%%"),
+                     label_standoff=6, border_line_color=None)
+
+p.add_layout(color_bar, 'right')
+show(p)
