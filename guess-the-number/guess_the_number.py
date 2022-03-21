@@ -98,6 +98,54 @@ def random_memory_strategy():
     return func
 
 
+def random_constrained_strategy():
+    """Random constrained strategy.
+
+    Randomly choose an integer in the range constrained by the feedback from
+    previous choices.
+
+    Returns
+    -------
+    callable(): Strategy function returning a random integer in the range
+        constrained by the feedback from previous choices.
+    """
+    low = LOW
+    high = HIGH
+    last_choice = None
+    def func(higher, lower):
+        nonlocal last_choice
+        if higher and not lower:
+            low = last_choice
+        elif not higher and lower:
+            high = last_choice
+        last_choice = randint(LOW, HIGH)
+        return last_choice
+    return func
+
+
+def optimal_strategy():
+    """Optimal strategy.
+
+    Binary search the range.
+
+    Returns
+    -------
+    callable(): Binary search of the range.
+    """
+    low = LOW
+    high = HIGH
+    last_choice = None
+    def func(higher, lower):
+        nonlocal last_choice
+        if higher and not lower:
+            low = last_choice
+        elif not higher and lower:
+            high = last_choice
+        last_choice = int((high - low + 1) / 2) + (low - 1)
+        return last_choice
+    return func
+
+
 def play_game(strategy):
     """Play a game using the suplied strategy.
 
