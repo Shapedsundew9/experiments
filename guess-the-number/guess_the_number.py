@@ -113,12 +113,12 @@ def random_constrained_strategy():
     high = HIGH
     last_choice = None
     def func(higher, lower):
-        nonlocal last_choice
+        nonlocal last_choice, high, low
         if higher and not lower:
             low = last_choice
         elif not higher and lower:
             high = last_choice
-        last_choice = randint(LOW, HIGH)
+        last_choice = randint(low, high)
         return last_choice
     return func
 
@@ -136,12 +136,12 @@ def optimal_strategy():
     high = HIGH
     last_choice = None
     def func(higher, lower):
-        nonlocal last_choice
+        nonlocal last_choice, high, low
         if higher and not lower:
             low = last_choice
         elif not higher and lower:
             high = last_choice
-        last_choice = int((high - low + 1) / 2) + (low - 1)
+        last_choice = int((high - low) / 2) + low
         return last_choice
     return func
 
@@ -182,7 +182,7 @@ def experiment_one():
     for strategy in filter(lambda x: '_strategy' in x, globals()):
         name = ' '.join(strategy.split('_')[:-1])
         func = globals()[strategy]
-        results[name] = array([play_game(func) for _ in trange(0, MAX_ATTEMPTS, desc=f'Strategy {name}')])
+        results[name] = array([play_game(func) for _ in trange(0, MAX_ATTEMPTS, desc=f'Strategy {name}', ascii='*')])
 
 
     x = array(range(0, MAX_ATTEMPTS, BAR_STEP)) + HALF_BAR_STEP
@@ -190,21 +190,35 @@ def experiment_one():
     ax = fig.add_axes([.05,.1,.9,.8])
     plt.xlim([0, MAX_ATTEMPTS])
     plt.ylim([0, NUM_GAMES])
+    plt.xlabel("Number of Attempts")
+    plt.ylabel("Number of Games")
+
     series = {name: ax.bar([], [], width=BAR_STEP, alpha=0.5) for name in results}
-    pbar = tqdm(total=NUM_FRAMES, desc='Building GIF')
+    pbar = tqdm(total=NUM_FRAMES, desc='Building full GIF', ascii='*')
+    max_attempts = MAX_ATTEMPTS
+    bar_step = BAR_STEP
+    bins = tuple(range(10, NUM_BARS * BAR_STEP, BAR_STEP))
 
     def animation(frame):
         batch = BATCH_SIZE * frame
         pbar.update(1)
         ax.clear()
-        plt.xlim([0, MAX_ATTEMPTS])
+        plt.xlim([0, max_attempts])
         plt.ylim([0, NUM_GAMES])
-        for name, bar in series.items():
-            y = bincount(digitize(results[name][0:batch], range(10, NUM_BARS * BAR_STEP, BAR_STEP)), minlength=NUM_BARS)
-            ax.bar(x, y, width=BAR_STEP, alpha=0.5)
+        for name in series:
+            y = bincount(digitize(results[name][0:batch], bins), minlength=NUM_BARS)
+            ax.bar(x, y, width=bar_step, alpha=0.5)
 
     gif = FuncAnimation(fig, animation, frames=100)
-    gif.save('video.gif', dpi=100, writer=PillowWriter(fps=25))
+    gif.save('full.gif', dpi=100, writer=PillowWriter(fps=25))
+
+    pbar = tqdm(total=NUM_FRAMES, desc='Building zoom GIF')
+    max_attempts = HIGH - LOW + 1
+    x = array(range(0, max_attempts))
+    bins = tuple(range(1, NUM_BARS))
+    bar_step = 1
+    gif = FuncAnimation(fig, animation, frames=100)
+    gif.save('zoom.gif', dpi=100, writer=PillowWriter(fps=25))
 
 
 if __name__ == "__main__":
