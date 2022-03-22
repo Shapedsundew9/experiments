@@ -182,41 +182,46 @@ def experiment_one():
     for strategy in filter(lambda x: '_strategy' in x, globals()):
         name = ' '.join(strategy.split('_')[:-1])
         func = globals()[strategy]
-        results[name] = array([play_game(func) for _ in trange(0, MAX_ATTEMPTS, desc=f'Strategy {name}', ascii='*')])
+        results[name] = array([play_game(func) for _ in trange(0, MAX_ATTEMPTS, desc=f'Strategy {name}', ascii=True)])
 
 
     x = array(range(0, MAX_ATTEMPTS, BAR_STEP)) + HALF_BAR_STEP
     fig = plt.figure(figsize=(16, 6))
     ax = fig.add_axes([.05,.1,.9,.8])
-    plt.xlim([0, MAX_ATTEMPTS])
-    plt.ylim([0, NUM_GAMES])
-    plt.xlabel("Number of Attempts")
-    plt.ylabel("Number of Games")
-
     series = {name: ax.bar([], [], width=BAR_STEP, alpha=0.5) for name in results}
-    pbar = tqdm(total=NUM_FRAMES, desc='Building full GIF', ascii='*')
+    pbar = tqdm(total=NUM_FRAMES, desc='Building full GIF', ascii=True)
     max_attempts = MAX_ATTEMPTS
     bar_step = BAR_STEP
     bins = tuple(range(10, NUM_BARS * BAR_STEP, BAR_STEP))
+    plot_values = [array([x for x in values if x < max_attempts]) for values in results.values()]
+    y_max = max([max(bincount(digitize(values, bins), minlength=NUM_BARS)) for values in plot_values])
 
     def animation(frame):
         batch = BATCH_SIZE * frame
         pbar.update(1)
         ax.clear()
         plt.xlim([0, max_attempts])
-        plt.ylim([0, NUM_GAMES])
+        plt.ylim([0, y_max])
+        plt.xlabel("Number of Attempts")
+        plt.ylabel("Number of Games")
+        #plt.legend('upper center')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         for name in series:
-            y = bincount(digitize(results[name][0:batch], bins), minlength=NUM_BARS)
-            ax.bar(x, y, width=bar_step, alpha=0.5)
+            values = array([x for x in results[name][0:batch] if x < max_attempts])
+            y = bincount(digitize(values, bins), minlength=NUM_BARS)
+            ax.bar(x, y, width=bar_step, alpha=0.5, label=name)
 
     gif = FuncAnimation(fig, animation, frames=100)
     gif.save('full.gif', dpi=100, writer=PillowWriter(fps=25))
 
-    pbar = tqdm(total=NUM_FRAMES, desc='Building zoom GIF')
+    pbar = tqdm(total=NUM_FRAMES, desc='Building zoom GIF', ascii=True)
     max_attempts = HIGH - LOW + 1
     x = array(range(0, max_attempts))
     bins = tuple(range(1, NUM_BARS))
     bar_step = 1
+    plot_values = [array([x for x in values if x < max_attempts]) for values in results.values()]
+    y_max = max([max(bincount(digitize(values, bins), minlength=NUM_BARS)) for values in plot_values])
     gif = FuncAnimation(fig, animation, frames=100)
     gif.save('zoom.gif', dpi=100, writer=PillowWriter(fps=25))
 
