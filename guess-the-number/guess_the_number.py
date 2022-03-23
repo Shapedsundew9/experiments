@@ -204,7 +204,7 @@ def experiment_one():
     fig = plt.figure(figsize=(16, 6))
     ax = fig.add_axes([.05,.1,.9,.8])
     series = {name: ax.bar([], [], width=BAR_STEP, alpha=0.5) for name in results}
-    pbar = tqdm(total=NUM_FRAMES, desc='Building full GIF', ascii=True)
+    pbar = tqdm(total=NUM_FRAMES, desc='Building full GIF', ascii='|/-\\|/-\\#')
     max_attempts = MAX_ATTEMPTS
     bar_step = BAR_STEP
     bins = tuple(range(10, NUM_BARS * BAR_STEP, BAR_STEP))
@@ -228,7 +228,7 @@ def experiment_one():
             ax.bar(x, y, width=bar_step, alpha=0.5, label=name)
 
     gif = FuncAnimation(fig, animation, frames=100)
-    gif.save('full.gif', dpi=100, writer=WRITER(fps=25))
+    gif.save('full.gif', dpi=100, writer=WRITER(fps=25, extra_args=['-loop', '1']), savefig_kwargs={"transparent": True})
 
     pbar = tqdm(total=NUM_FRAMES, desc='Building zoom GIF', ascii=True)
     max_attempts = HIGH - LOW + 1
@@ -238,7 +238,7 @@ def experiment_one():
     plot_values = [array([x for x in values if x < max_attempts]) for values in results.values()]
     y_max = max([max(bincount(digitize(values, bins), minlength=NUM_BARS)) for values in plot_values])
     gif = FuncAnimation(fig, animation, frames=100)
-    gif.save('zoom.gif', dpi=100, writer=WRITER(fps=25))
+    gif.save('zoom.gif', dpi=100, writer=WRITER(fps=25, extra_args=['-loop', '1']), savefig_kwargs={"transparent": True})
 
 
 if __name__ == "__main__":
