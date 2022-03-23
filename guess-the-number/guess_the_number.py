@@ -3,7 +3,7 @@ from functools import partial
 from random import randint
 from tqdm import trange, tqdm
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.animation import FuncAnimation, PillowWriter, HTMLWriter, ImageMagickWriter
 from numpy import array, digitize, bincount, arange
 from numpy.random import shuffle
 
@@ -18,6 +18,21 @@ BAR_STEP = int(MAX_ATTEMPTS / NUM_BARS)
 HALF_BAR_STEP = int(0.5 * BAR_STEP)
 BATCH_SIZE = 10
 NUM_FRAMES = int(NUM_GAMES / BATCH_SIZE) + 1
+
+# After much playing:
+#   PillowWriter: Can only produce an infinite loop GIF. Is much quicker than ImageMagickWriter but produces a file 3x larger
+#   PillowWriterNG: Is a hack but only reduces the looping to 2. Cannot find a way to play a GIF once this way.
+#   HTMLWriter: Only produces HTML
+#   ImageMagickWriter: Has a very slow save as it does 'convert' but smallest GIF by 3x. Need to loop at looping and progress bar options.
+WRITER = ImageMagickWriter
+
+# Over-ride the hard-coded loop=0 (infinite loop)
+# See https://github.com/matplotlib/matplotlib/blob/9765379ce6e7343070e815afc0988874041b98e2/lib/matplotlib/animation.py#L513
+class PillowWriterNG(PillowWriter):
+    def finish(self):
+            self._frames[0].save(
+                self.outfile, save_all=True, append_images=self._frames[1:],
+                duration=int(1000 / self.fps), loop=1)
 
 
 def _check_attempt(attempt, answer):
@@ -213,7 +228,7 @@ def experiment_one():
             ax.bar(x, y, width=bar_step, alpha=0.5, label=name)
 
     gif = FuncAnimation(fig, animation, frames=100)
-    gif.save('full.gif', dpi=100, writer=PillowWriter(fps=25))
+    gif.save('full.gif', dpi=100, writer=WRITER(fps=25))
 
     pbar = tqdm(total=NUM_FRAMES, desc='Building zoom GIF', ascii=True)
     max_attempts = HIGH - LOW + 1
@@ -223,7 +238,7 @@ def experiment_one():
     plot_values = [array([x for x in values if x < max_attempts]) for values in results.values()]
     y_max = max([max(bincount(digitize(values, bins), minlength=NUM_BARS)) for values in plot_values])
     gif = FuncAnimation(fig, animation, frames=100)
-    gif.save('zoom.gif', dpi=100, writer=PillowWriter(fps=25))
+    gif.save('zoom.gif', dpi=100, writer=WRITER(fps=25))
 
 
 if __name__ == "__main__":
