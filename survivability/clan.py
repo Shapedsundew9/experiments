@@ -12,11 +12,25 @@ N_BINS = 100000
 class hurlabbab():
 
     default_kwargs = {
-        'id': None,
-        'generation': None,
-        'parent_id': None,
-        'clan': None
+        'x': 0.0,
+        'y': 0.0,
+        'p': 1.0,
+        'd': 2*pi,
+        'ps': 0.2,
+        'ds': 0.2,
+        'ss': 0.1,
+        'f': 1.0,
+        's': 1.0,
+        'a': None,
+        'pg': 0
     }
+    _exclude = (
+        '__module__',
+        '__main__',
+        '__dict__',
+        '__weakref__',
+        '__doc__'
+    )
     idx_gen = count()
     fossil_record = []
 
@@ -24,6 +38,9 @@ class hurlabbab():
     def __init__(self, **kwargs):
         """Define"""
         self.__dict__.update(**hurlabbab.default_kwargs)
+        self.d *= uniform(0.0, 1.0)
+        self.p = self.fuzz_power()
+        self.__dict__.update(**kwargs)
         self.id = next(hurlabbab.idx_gen)
         hurlabbab.fossil_record.append(self)
 

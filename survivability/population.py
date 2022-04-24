@@ -1,70 +1,97 @@
 from hurlabbab import hurlabbab
-from numpy import pi, cos, sin, array, max, min, mean
+from numpy import pi, cos, sin, array, max, min, mean, empty, float32, zeros, int32
 from numpy.random import uniform, choice
 import matplotlib.pyplot as plt
 from functools import partial
+from copy import deepcopy
 
 
-def _ff(individual):
-    individual.f = 1.0
-    return individual
+_STAT_BODY = {
+    'values': [],
+    'function': None
+}
 
-def _sf(population):
-    for individual in population:
-        individual.s = 1.0
+_STATS_BODY = {
+    'max': deepcopy(_STAT_BODY),
+    'min': deepcopy(_STAT_BODY),
+    'mean': deepcopy(_STAT_BODY),
+    'data': None
+}
+
+def _fitness_function(population_data):
+    """Template fitness function.
+
+    Args
+    ----
+    population_data (ndarray): Shape (nargs, *)
+
+    Returns
+    -------
+    fitness (ndarray): Shape (*,)
+    """
+    raise NotImplementedError
+
+def initialize(size, narg_lim):
+    """Default function for initializing Hurlabbab arguments.
+
+    Initialises the population data with a uniform distribution
+    in the range narg_lim[x][0] <= arg[x][:] <= narg_lim[x][1].
+
+    Args
+    ----
+    nargs (int): Number of hurlabbab arguments.
+    size (int): Population size.
+    narg_lim (iterable(tuple(float32, float32))) or None: List of (low, high) limits.
+
+    Returns
+    -------
+    (ndarray): Shape (len(narg_lim), size) of float32 type.
+    """
+    narg = empty((len(narg_lim), size), dtype=float32)
+    for arg, arg_lim in zip(narg, narg_lim):
+        arg = uniform(arg_lim[0], arg_lim[1], size)
+    return arg
 
 
-class population(list):
+class population():
 
     default_kwargs = {
-        'n': 100,
-        'cr': 1.0,
-        'cx': 0.0,
-        'cy': 0.0,
-        'g': 0,
-        'gl': 500,
-        'ff': _ff,
-        'sf': _sf,
-        'bf': [0.0],
-        'wf': [0.0],
-        'mf': [0.0],
-        'bg': [0],
-        'hg': [0],
-        'lg': [0],
-        'mg': [0.0],
-        'e': 1e-38,
+        'crash_radius': 1.0,
+        'crash_x': 0.0,
+        'crash_y': 0.0,
+        'generation': 0,
+        'generation_limit': 500,
+        'fitness_function': _fitness_function,
+        'stats': {
+            'fitness': deepcopy(_STATS_BODY),
+            'generation': deepcopy(_STATS_BODY)
+        },
+        'tolerence': 1e-38,
         'done': False
     }
 
-    def __init__(self, **kwargs):
+    def __init__(self, fitness_function, args, **kwargs):
         self.__dict__.update(**population.default_kwargs)
         self.__dict__.update(**kwargs)
-        self.extend(tuple(hurlabbab(**self.crash_position()) for _ in range(self.n)))
-        self.e = max((self.e, int(-self.n * 0.1)))
+        self.fitness_function = fitness_function
+        self.args = args
+        self.nargs, self.size = args.shape
+        self.fitness = self.fitness_function(args)
+        self.generation = zeros((self.size,), dtype=int32)
+        self.clan = zeros((self.size,), dtype=int32)
+        self.survivability = empty((self.size,), dtype=float32)
+        self.stats['fitness']['data'] = self.fitness
+        self.stats['generation']['data'] = self.fitness
 
-    def set_ff(self, ff):
-            self.ff = partial(ff, p=self)
-            for i in self: self.ff(i)
 
-    def set_sf(self, sf):
-            self.sf = partial(sf, p=self)
-            self.sf()
-
-    def crash_position(self):
-        angle = uniform() * pi
-        distance = uniform(-1.0, 1.0) * self.cr
-        dx = cos(angle) * distance
-        dy = sin(angle) * distance
-        x = self.cx + dx
-        y = self.cy + dy
-        return {
-            'x': x,
-            'y': y
-        }
+    def survival_function(self):
+        return self.fitness
 
     def stats(self):
-        fitness = array([i.f for i in self])
-        self.bf.append(max(fitness))
+        for stat in stats:
+            stat
+
+        self.statsbf.append(max(fitness))
         self.wf.append(min(fitness))
         self.mf.append(mean(fitness))
         generation = array([i.pg for i in self])
