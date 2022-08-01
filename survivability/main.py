@@ -7,7 +7,7 @@ from numpy.random import choice
 
 
 l = mountain_domain()
-p = population(cr=l.x_max, n=20)
+p = population(cr=l.x_max, n=1000)
 #l = mountain_cluster()
 #p = population(cx=l.x_min * 0.9, cy=l.y_min * 0.9)
 
