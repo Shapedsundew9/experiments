@@ -1,7 +1,7 @@
 from numpy import zeros, ones, float32, exp, array, concatenate, newaxis, empty
 from numpy.random import default_rng
-from matplotlib import use
 from tqdm import tqdm
+from matplotlib import use
 use('GTK3Cairo')
 import matplotlib.figure as figure 
 

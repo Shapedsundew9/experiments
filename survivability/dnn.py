@@ -10,29 +10,61 @@ from os import environ
 environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow.random import set_seed as tf_seed
+from tensorflow.keras import layers, initializers
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.backend import clear_session
 from json import dumps, loads
 from hashlib import blake2b
-from os.path import exists
-from tqdm import tqdm
+from os.path import exists, join
+from os import makedirs
+from tqdm import tqdm, trange
 from sys import exit
 from functools import partial
 from gzip import open as gz_open
+from numpy.linalg import norm
+from numpy import isclose, newaxis, concatenate, empty, var, mean, array
+from numpy.random import seed as np_seed
+from random import seed as py_seed
+from gc import collect
+from scipy.optimize import linear_sum_assignment
+from matplotlib import use
+use('GTK3Cairo')
+import matplotlib.figure as figure 
 
-
+# Setup
 _DATA_HASHES_FILE_BASE = 'data_hashes'
 _VALIDATION_SAMPLE_NUM = 10000
+_SEED = 42
+_POPULATION = 1000
+_WEIGHTS_INITIALIZER = initializers.GlorotUniform()
+_BIAS_INITIALIZER = initializers.Zeros()
+
+# Experiment 1
+_EXP1_DIR = 'exp1'
+_EXP1_SW_BASE = join(_EXP1_DIR, 'start_weights')
+_EXP1_EW_BASE = join(_EXP1_DIR, 'end_weights')
+_EXP1_SD_BASE = join(_EXP1_DIR, 'start_distances')
+_EXP1_ED_BASE = join(_EXP1_DIR, 'end_distances')
+_EXP1_TD_BASE = join(_EXP1_DIR, 'travel_distances')
+_EXP1_SA_BASE = join(_EXP1_DIR, 'start_accuracy')
+_EXP1_EA_BASE = join(_EXP1_DIR, 'end_accuracy')
+_EXP1_CP_BASE = join(_EXP1_DIR, 'centre_point')
+
+# Experiment 2
+_EXP2_DIR = 'exp2'
+
+# Functions defined at runtime
+fit = None
+evaluate = None
 
 
 def create_model():
     """Create a standard model to use in all the experiments.
-
-    Also returns the definition of the early stopping callback.
     
     Returns
     -------
-    (keras.model, EarlyStopping)
+    (keras.model) The model is compiled.
     """
     inputs = keras.Input(shape=(784,), name="digits")
     x = layers.Dense(64, activation="relu", name="dense_1")(inputs)
@@ -40,7 +72,6 @@ def create_model():
     outputs = layers.Dense(10, activation="softmax", name="predictions")(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs)
-    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=2)
 
     model.compile(
         optimizer=keras.optimizers.RMSprop(),  # Optimizer
@@ -49,8 +80,7 @@ def create_model():
         # List of metrics to monitor
         metrics=[keras.metrics.SparseCategoricalAccuracy()],
     )
-    model.summary()
-    return model, es
+    return model
 
 
 def dumpz(obj, filepath):
@@ -78,6 +108,29 @@ def loadz(filepath):
     """
     with gz_open(filepath + '.json.gz', 'rt') as file:
         return loads(file.read())
+
+
+def save_weights(model, filepath):
+    """Save model weights in an hdf5 file in folder at filepath.
+    
+    Args
+    ----
+    model (keras.model): Model from which to store the weights.
+    filepath (str): Base filepath
+    """
+    model.save_weights(filepath + '.h5')
+
+
+def load_weights(model, filepath):
+    """Load model weights from folder at filepath.
+    
+    Args
+    ----
+    model (keras.model): Model from which to load the weights.
+    filepath (str): Base filepath
+    """
+    model.load_weights(filepath + '.h5')
+    return model
 
 
 def load_data():
@@ -148,8 +201,57 @@ def _fit(model, es, data):
         batch_size=64,
         epochs=50,
         validation_data=(data['x_val'], data['y_val']),
-        callbacks=[es]
+        callbacks=[es],
+        verbose=0
     )
+
+
+def _evaluate(model, data):
+    """Evaluate the model.
+    
+    Args
+    ----
+    model (keras.model): The DNN model (is modified)
+    data (dict): See load_data() return value for structure.
+    """
+    results = model.evaluate(
+        data['x_test'],
+        data['y_test'],
+        batch_size=64,
+        verbose=0,
+        return_dict=True
+    )
+    return results['sparse_categorical_accuracy']
+
+
+def new_weights(model):
+    """Re-initialise weights (without re-creating) model.
+    
+    Args
+    ----
+    model (keras.model): Model with weights to re-initialize.
+    """
+    new_weights = []
+    for layer in model.get_weights():
+        if len(layer.shape) > 1:
+            new_weights.append(_WEIGHTS_INITIALIZER(shape=layer.shape))
+        else:
+            new_weights.append(_BIAS_INITIALIZER(shape=layer.shape))
+    model.set_weights(new_weights)
+
+
+def flatten_weights(model):
+    """Extract the weights from model as a flattened numpy array.
+    
+    Args
+    ----
+    model (keras.model): Model with weights to extract.
+
+    Returns
+    -------
+    (1D-ndarray)
+    """
+    return concatenate(tuple(w.flatten() for w in model.get_weights()))
 
 
 def align_weights(model, ref_model):
@@ -189,19 +291,193 @@ def align_weights(model, ref_model):
     model (keras.model): Model with weights to align (must be the same shape as ref_model)
     ref_model (keras.model): Model to align weights with
     """
+    layer, ref_layer = model.get_weights(), ref_model.get_weights()
+    layer = layer.reshape(layer.shape[::-1])
+    ref_layer = ref_layer.reshape(ref_layer.shape[::-1])
+
+    # Savage bit of numpy.
+    # Calculate the Euclidean distance - "norm()""
+    # between the weights going into a neuron in layer and the weights for each of the neurons
+    # in ref_layer, for all neurons in layer - "layer[:, newaxis] - ref_layer, axis=2". 
+    # ...
+    new_order = linear_sum_assignment(norm(layer[:, newaxis] - ref_layer, axis=2))
+    layer = layer
     pass
     # TODO: Can draw this out as a graph with fixed neuron positions as an example.
 
+
+def set_seed(seed=_SEED):
+    """Set the seed of all random generators.
+    
+    This is necessary to reproduce training a model.
+
+    Args
+    ----
+    seed (int): The seed.
+    """
+    np_seed(_SEED)
+    py_seed(_SEED)
+    tf_seed(_SEED)
+
+
+def reproducibility():
+    """Validates results can be reproduced."""
+    print("Validating reproducibility...", end='', flush=True)
+    model1 = create_model()
+    model2 = create_model()
+    model2.set_weights(model1.get_weights())
+    set_seed()
+    fit(model1)
+    set_seed()
+    fit(model2)
+    for l1, l2 in zip(model1.get_weights(), model2.get_weights()):
+        assert isclose(l1, l2).all(), 'Training is not reproducible! Not even close!'
+        assert (l1 == l2).all(), 'Training is not reproducible! Not exact!'
+    print('OK', flush=True)
+
+
+def plot_histogram(data, title, filename):
+    """Plot a histogram of data with title.
+
+    Args
+    ----
+    data (1D-array-like): Data to histogram
+    title (str): Title to put on histogram
+    """
+    fig = figure.Figure(figsize=(12.0, 8.0))
+    ax = fig.add_subplot()
+    ax.hist(data, 100)
+    ax.set_title(title)
+    ax.set_xlabel('Separation distance')
+    ax.set_ylabel('Count')
+    fig.savefig(f'{filename}.png')
+
+
+def experiment_1(model):
+    """Separations of initialisation and trained states in hyperspace.
+        
+    Args
+    ----
+    model (keras.model): Model to use.
+    """
+    if not exists(_EXP1_DIR):
+        makedirs(_EXP1_DIR)
+
+    # Generate initial weights an separations from each other
+    if not exists(f'{_EXP1_SD_BASE}.json.gz'):
+        data = empty((_POPULATION, len(flatten_weights(model))))
+        for i in trange(_POPULATION, desc='Exp 1: Generation'):
+            if not exists(f'{_EXP1_SW_BASE}_{i:06d}.h5'):
+                new_weights(model)
+                save_weights(model, f'{_EXP1_SW_BASE}_{i:06d}')
+            else:
+                load_weights(model, f'{_EXP1_SW_BASE}_{i:06d}')
+            data[i] = flatten_weights(model)
+
+        start_distances = []
+        centre_point = mean(data, axis=0)
+        for i in trange(_POPULATION, desc='Exp 1: Initial separation'):
+            for j in range(i + 1, _POPULATION):
+                start_distances.append(norm(data[i]-data[j]))
+        dumpz(start_distances, _EXP1_SD_BASE)
+        dumpz(centre_point.tolist(), _EXP1_CP_BASE)
+    else:
+        start_distances = loadz(_EXP1_SD_BASE)
+        centre_point = array(loadz(_EXP1_CP_BASE))
+    centre_distance_from_origin = norm(centre_point)
+    # TODO: Add to plot
+    plot_histogram(start_distances, 'Separations of initial starting positions.', _EXP1_SD_BASE)
+
+    # Fit the DNN's and calaculate the distance travelled to the minimum from the starting weights
+    # and the separations of all the minima found
+    if not exists(f'{_EXP1_ED_BASE}.json.gz'):
+        travel_distances = []
+        data = empty((_POPULATION, len(flatten_weights(model))))
+        for i in trange(_POPULATION, desc='Exp 1: Fitting'):
+            load_weights(model, f'{_EXP1_SW_BASE}_{i:06d}')
+            start_position = flatten_weights(model)
+            if not exists(f'{_EXP1_EW_BASE}_{i:06d}.h5'):
+                fit(model)
+                save_weights(model, f'{_EXP1_EW_BASE}_{i:06d}')
+                collect()
+                clear_session()
+            else:
+                load_weights(model, f'{_EXP1_EW_BASE}_{i:06d}')
+            data[i] = flatten_weights(model)
+            travel_distances.append(norm(start_position - data[i]))
+        dumpz(travel_distances, _EXP1_TD_BASE)
+
+        end_distances = []
+        for i in trange(_POPULATION, desc='Exp 1: Final separation'):
+            for j in range(i + 1, _POPULATION):
+                end_distances.append(norm(data[i]-data[j]))
+        dumpz(end_distances, _EXP1_ED_BASE)
+    else:
+        end_distances = loadz(_EXP1_ED_BASE)
+        travel_distances = loadz(_EXP1_TD_BASE)
+    plot_histogram(end_distances, 'Separations of found minima positions.', _EXP1_ED_BASE)
+    plot_histogram(travel_distances, 'Distance travelled from start position to minima position.', _EXP1_TD_BASE)
+
+    # Initial accuracy (before training)
+    if not exists(f'{_EXP1_SA_BASE}.json.gz'):
+        start_accuracy = []
+        for i in trange(_POPULATION, desc='Exp 1: Initial accuracy'):
+            start_accuracy.append(evaluate(load_weights(model, f'{_EXP1_SW_BASE}_{i:06d}')))
+        dumpz(start_accuracy, _EXP1_SA_BASE)            
+    else:
+        start_accuracy = loadz(_EXP1_SA_BASE)            
+    plot_histogram(start_accuracy, 'Initial accuracy (before training)', _EXP1_SA_BASE)
+
+    # Final accuracy (after training)
+    if not exists(f'{_EXP1_EA_BASE}.json.gz'):
+        end_accuracy = []
+        for i in trange(_POPULATION, desc='Exp 1: Final accuracy'):
+            end_accuracy.append(evaluate(load_weights(model, f'{_EXP1_EW_BASE}_{i:06d}')))
+        dumpz(end_accuracy, _EXP1_SA_BASE)            
+    else:
+        start_accuracy = loadz(_EXP1_SA_BASE)            
+    plot_histogram(end_accuracy, 'Final accuracy (after training)', _EXP1_EA_BASE)
+
+
+def experiment_2(model):
+    """Distribution of starting states in hyperspace.
+        
+    Args
+    ----
+    model (keras.model): Model to use.
+    """
+    if not exists(_EXP2_DIR):
+        makedirs(_EXP2_DIR)
+
+    data = empty((_POPULATION, len(flatten_weights(model))))
+    for i in trange(_POPULATION, desc='Exp 2: Loading'):
+        data[i] = flatten_weights(load_weights(model, f'{_EXP1_SW_BASE}_{i:06d}'))
+
+    variances = var(data, axis=1)
+    averages = mean(data, axis=1)
+
+
 if __name__ == '__main__':
+
+    # Set up
     data = load_data()
-    model, es = create_model()
+    es = EarlyStopping(monitor='val_loss', mode='min', verbose=0, patience=2)
+    model = create_model()
+    model.summary()
     fit = partial(_fit, es=es, data=data)
+    evaluate = partial(_evaluate, data=data)
+
+    # Sanity
+    #reproducibility()
+
+    # Experiments
+    experiment_1(model)
+"""
     a=model.get_weights()
     print(type(a), ': ', print(len(a)))
     for i in a: print(type(i), ': ', i.shape)
 
 
-"""
 # Evaluate the model on the test data using `evaluate`
 print("Evaluate on test data")
 results = model.evaluate(x_test, y_test, batch_size=128)
