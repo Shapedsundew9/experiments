@@ -23,7 +23,7 @@ from sys import exit
 from functools import partial
 from gzip import open as gz_open
 from numpy.linalg import norm
-from numpy import isclose, newaxis, concatenate, empty, var, mean, array
+from numpy import isclose, newaxis, concatenate, empty, var, mean, array, save, load, sort
 from numpy.random import seed as np_seed
 from random import seed as py_seed
 from gc import collect
@@ -53,11 +53,22 @@ _EXP1_CP_BASE = join(_EXP1_DIR, 'centre_point')
 
 # Experiment 2
 _EXP2_DIR = 'exp2'
+_EXP2_EV_BASE = join(_EXP2_DIR, 'end_variances')
+_EXP2_EA_BASE = join(_EXP2_DIR, 'end_averages')
+_EXP2_EO_BASE = join(_EXP2_DIR, 'end_outputs')
+_EXP2_OS_BASE = join(_EXP2_DIR, 'output_seperations')
+
+# Experiment 3
+_EXP3_DIR = 'exp3'
+_EXP3_IA_BASE = join(_EXP3_DIR, 'intermediate_accuracy')
+_EXP3_IS_BASE = join(_EXP3_DIR, 'intermediate_separations')
+
+
 
 # Functions defined at runtime
 fit = None
 evaluate = None
-
+predict = None
 
 def create_model():
     """Create a standard model to use in all the experiments.
@@ -70,9 +81,7 @@ def create_model():
     x = layers.Dense(64, activation="relu", name="dense_1")(inputs)
     x = layers.Dense(64, activation="relu", name="dense_2")(x)
     outputs = layers.Dense(10, activation="softmax", name="predictions")(x)
-
     model = keras.Model(inputs=inputs, outputs=outputs)
-
     model.compile(
         optimizer=keras.optimizers.RMSprop(),  # Optimizer
         # Loss function to minimize
@@ -224,6 +233,21 @@ def _evaluate(model, data):
     return results['sparse_categorical_accuracy']
 
 
+def _predict(model, data):
+    """Generate the last layer outputs for data.
+    
+    Args
+    ----
+    model (keras.model): The DNN model (is modified)
+    data (dict): See load_data() return value for structure.
+    """
+    return model.predict(
+        data['x_test'],
+        batch_size=64,
+        verbose=0
+    )
+
+
 def new_weights(model):
     """Re-initialise weights (without re-creating) model.
     
@@ -291,18 +315,43 @@ def align_weights(model, ref_model):
     model (keras.model): Model with weights to align (must be the same shape as ref_model)
     ref_model (keras.model): Model to align weights with
     """
-    layer, ref_layer = model.get_weights(), ref_model.get_weights()
-    layer = layer.reshape(layer.shape[::-1])
-    ref_layer = ref_layer.reshape(ref_layer.shape[::-1])
+    layers, ref_layers = model.get_weights(), ref_model.get_weights()
+    new_layers = []
+    pairs = tuple(zip(layers, ref_layers))
+    for i, (layer, ref_layer) in enumerate(pairs):
+        if not i & 1:
+            layer = layer.reshape(layer.shape[::-1])
+            ref_layer = ref_layer.reshape(ref_layer.shape[::-1])
 
-    # Savage bit of numpy.
-    # Calculate the Euclidean distance - "norm()""
-    # between the weights going into a neuron in layer and the weights for each of the neurons
-    # in ref_layer, for all neurons in layer - "layer[:, newaxis] - ref_layer, axis=2". 
-    # ...
-    new_order = linear_sum_assignment(norm(layer[:, newaxis] - ref_layer, axis=2))
-    layer = layer
-    pass
+            # Savage bit of numpy.
+            # Calculate the Euclidean distance - "norm()""
+            # between the weights going into a neuron in layer and the weights for each of the neurons
+            # in ref_layer, for all neurons in layer - "layer[:, newaxis] - ref_layer, axis=2". 
+            # ...
+            new_order = linear_sum_assignment(norm(layer[:, newaxis] - ref_layer, axis=2))[1]
+            new_layers.append(layer[new_order].reshape(layer.shape[::-1]))
+        else:
+            new_layers.append(layer[new_order])
+
+    for layer, new_layer in zip(layers, new_layers):
+        print(layer.shape, new_layer.shape)
+
+        if len(layer.shape) == 2:
+            old_hashes = {hash(sort(row).data.tobytes()) for row in layer.reshape(layer.shape[::-1])}
+            new_hashes = {hash(sort(row).data.tobytes()) for row in new_layer.reshape(new_layer.shape[::-1])}
+            print(sorted(old_hashes)[:5])
+            print(sorted(new_hashes)[:5])
+            assert old_hashes == new_hashes
+
+    old_predictions = predict(model)
+    tmp_layers = [new_layers[0]]
+    tmp_layers.extend(layers[1:])
+    model.set_weights(tmp_layers)
+    new_predictions = predict(model)
+    for old, new in zip(old_predictions, new_predictions):
+        print(old)
+        print(new)
+        barf()
     # TODO: Can draw this out as a graph with fixed neuron positions as an example.
 
 
@@ -378,7 +427,7 @@ def experiment_1(model):
         centre_point = mean(data, axis=0)
         for i in trange(_POPULATION, desc='Exp 1: Initial separation'):
             for j in range(i + 1, _POPULATION):
-                start_distances.append(norm(data[i]-data[j]))
+                start_distances.append({'model_i': i, 'model_j': j, 'distance': norm(data[i]-data[j])})
         dumpz(start_distances, _EXP1_SD_BASE)
         dumpz(centre_point.tolist(), _EXP1_CP_BASE)
     else:
@@ -386,7 +435,7 @@ def experiment_1(model):
         centre_point = array(loadz(_EXP1_CP_BASE))
     centre_distance_from_origin = norm(centre_point)
     # TODO: Add to plot
-    plot_histogram(start_distances, 'Separations of initial starting positions.', _EXP1_SD_BASE)
+    plot_histogram([d['distance'] for d in start_distances], 'Separations of initial starting positions.', _EXP1_SD_BASE)
 
     # Fit the DNN's and calaculate the distance travelled to the minimum from the starting weights
     # and the separations of all the minima found
@@ -433,14 +482,14 @@ def experiment_1(model):
         end_accuracy = []
         for i in trange(_POPULATION, desc='Exp 1: Final accuracy'):
             end_accuracy.append(evaluate(load_weights(model, f'{_EXP1_EW_BASE}_{i:06d}')))
-        dumpz(end_accuracy, _EXP1_SA_BASE)            
+        dumpz(end_accuracy, _EXP1_EA_BASE)            
     else:
-        start_accuracy = loadz(_EXP1_SA_BASE)            
+        end_accuracy = loadz(_EXP1_EA_BASE)            
     plot_histogram(end_accuracy, 'Final accuracy (after training)', _EXP1_EA_BASE)
 
 
 def experiment_2(model):
-    """Distribution of starting states in hyperspace.
+    """Distribution of starting states in hyperspace & separations of prediction probabilities.
         
     Args
     ----
@@ -449,12 +498,72 @@ def experiment_2(model):
     if not exists(_EXP2_DIR):
         makedirs(_EXP2_DIR)
 
-    data = empty((_POPULATION, len(flatten_weights(model))))
-    for i in trange(_POPULATION, desc='Exp 2: Loading'):
-        data[i] = flatten_weights(load_weights(model, f'{_EXP1_SW_BASE}_{i:06d}'))
+    if not exists(f'{_EXP2_EV_BASE}.npy') or not exists(f'{_EXP2_EA_BASE}.npy'):
+        data = empty((_POPULATION, len(flatten_weights(model))))
+        for i in trange(_POPULATION, desc='Exp 2: Loading'):
+            data[i] = flatten_weights(load_weights(model, f'{_EXP1_SW_BASE}_{i:06d}'))
+        variances = var(data, axis=1)
+        averages = mean(data, axis=1)
+        save(_EXP2_EV_BASE, variances)
+        save(_EXP2_EA_BASE, averages)
+    else:
+        variances = load(f'{_EXP2_EV_BASE}.npy')
+        averages = load(f'{_EXP2_EA_BASE}.npy')
+    plot_histogram(variances, 'Final weight variances', _EXP2_EV_BASE)
+    plot_histogram(averages, 'Final weight averages', _EXP2_EA_BASE)
 
-    variances = var(data, axis=1)
-    averages = mean(data, axis=1)
+    if not exists(f'{_EXP2_EO_BASE}.npy'):
+        data = empty((_POPULATION, _VALIDATION_SAMPLE_NUM, model.get_layer('predictions').output_shape[1]))
+        for i in trange(_POPULATION, desc='Exp 2: Predicting'):
+            load_weights(model, f'{_EXP1_SW_BASE}_{i:06d}')
+            data[i] = predict(model)
+        save(_EXP2_EO_BASE, data)
+
+    if not exists(f'{_EXP2_OS_BASE}.json.gz'):
+        outputs = load(f'{_EXP2_EO_BASE}.npy')
+        output_distances = []
+        for i in trange(_POPULATION, desc='Exp 2: Distances'):
+            for j in range(i + 1, _POPULATION):
+                output_distances.append({'model_i': i, 'model_j': j, 'distance': norm(outputs[i]-outputs[j])})
+        dumpz(output_distances, _EXP2_OS_BASE)
+    else:
+        output_distances = loadz(_EXP2_OS_BASE)
+    plot_histogram([d['distance'] for d in output_distances], 'Separations of test set predictions.', _EXP2_OS_BASE)
+
+
+def experiment_3(model):
+    """Catchment area.
+
+    Args
+    ----
+    model (keras.model): Model to use.
+    """
+    if not exists(_EXP3_DIR):
+        makedirs(_EXP3_DIR)
+
+    # Need data from experiment 1
+    if not exists(f'{_EXP1_ED_BASE}.json.gz'):
+        experiment_1(model)
+    end_distances = loadz(_EXP1_ED_BASE)
+
+    # Find the maximum radius of the catchment area for a minimum.
+    closest_pair = sorted(end_distances, key=lambda x: x['distance'])[0]
+    weights_i = flatten_weights(load_weights(model, f'{_EXP1_SW_BASE}_{closest_pair["model_i"]:06d}'))
+    max_catchment_radius = closest_pair['distance'] / 2.0
+    delta_radius = max_catchment_radius / _POPULATION
+    tmp_model = create_model()
+
+    # Randomly fuzz model_i trained weights so they sit at a specific radius from
+    # the trained weights.
+    for nr in range(_POPULATION):
+
+    
+
+
+
+    # Binary c
+    if not exists(f'{_EXP2_EV_BASE}.npy') or not exists(f'{_EXP2_EA_BASE}.npy'):
+        pass
 
 
 if __name__ == '__main__':
@@ -466,12 +575,15 @@ if __name__ == '__main__':
     model.summary()
     fit = partial(_fit, es=es, data=data)
     evaluate = partial(_evaluate, data=data)
+    predict = partial(_predict, data=data)
 
     # Sanity
     #reproducibility()
 
     # Experiments
-    experiment_1(model)
+    #experiment_1(model)
+    #experiment_2(model)
+    #align_weights(model, create_model())
 """
     a=model.get_weights()
     print(type(a), ': ', print(len(a)))
