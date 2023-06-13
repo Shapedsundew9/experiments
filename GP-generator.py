@@ -12,6 +12,7 @@ Therefore GC graphs are limited too:
 from copy import deepcopy
 from random import choice
 from itertools import count
+from json import dump
 
 
 _NUM_GENERATIONS = 100
@@ -65,3 +66,6 @@ for generation in range(_NUM_GENERATIONS):
             'ref': next(reference)
         }
     )
+
+with open('~/gcs.json', 'w', encoding='utf-8') as fptr:
+    dump(gcs, fptr)
