@@ -9,9 +9,9 @@ Output: int
 Therefore GC graphs are limited too:
 
 """
-from collections import Counter
 from copy import deepcopy
 from random import choice
+from itertools import count
 
 
 _NUM_GENERATIONS = 100
@@ -51,7 +51,7 @@ _DEFAULT_GC = {
 }
 
 
-reference = Counter()
+reference = count()
 gcs = [deepcopy(_DEFAULT_GC), deepcopy(_DEFAULT_GC)]
 gcs[0]['ref'] = next(reference)
 gcs[1]['ref'] = next(reference)
