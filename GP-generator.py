@@ -62,6 +62,6 @@ for generation in range(_NUM_GENERATIONS):
             'ancestor_b_ref': 0,
             'gca_ref': choice(gcs),
             'gcb_ref': choice(gcs),
-            'ref': next(count)
+            'ref': next(reference)
         }
     )
