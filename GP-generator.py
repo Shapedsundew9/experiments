@@ -67,5 +67,5 @@ for generation in range(_NUM_GENERATIONS):
         }
     )
 
-with open('~/gcs.json', 'w', encoding='utf-8') as fptr:
-    dump(gcs, fptr)
+with open('/home/shapedsundew9/gcs.json', 'w', encoding='utf-8') as fptr:
+    dump(gcs, fptr, indent=4, sort_keys=True)
