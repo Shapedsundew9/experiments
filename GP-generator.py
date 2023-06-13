@@ -9,8 +9,12 @@ Output: int
 Therefore GC graphs are limited too:
 
 """
-from graph_tool import Graph
+from collections import Counter
+from copy import deepcopy
+from random import choice
 
+
+_NUM_GENERATIONS = 100
 _GRAPHS = (
     {
         'A': [['I', 0, 2], ['I', 1, 2]],
@@ -38,3 +42,26 @@ _GRAPHS = (
         'O': [['B', 0, 2]]
     }
 )
+_DEFAULT_GC = {
+    'ancestor_a_ref': 0,
+    'ancestor_b_ref': 0,
+    'gca_ref': 0,
+    'gcb_ref': 0,
+    'ref': 0
+}
+
+
+reference = Counter()
+gcs = [deepcopy(_DEFAULT_GC), deepcopy(_DEFAULT_GC)]
+gcs[0]['ref'] = next(reference)
+gcs[1]['ref'] = next(reference)
+for generation in range(_NUM_GENERATIONS):
+    gcs.append(
+        {
+            'ancestor_a_ref': 0,
+            'ancestor_b_ref': 0,
+            'gca_ref': choice(gcs),
+            'gcb_ref': choice(gcs),
+            'ref': next(count)
+        }
+    )
