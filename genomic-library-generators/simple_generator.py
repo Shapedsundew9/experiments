@@ -59,7 +59,9 @@ with open(abspath, "r", encoding='utf-8') as fptr:
     codons = load(fptr)
 
 gcs = {bytes.fromhex(c['signature']): LGC_json_load_entry_validator.normalized(c) for c in codons if c['meta_data']['name'] in _NAMES and c['input_types'] == c['output_types'] == _TYPES}
-pgc_signature = bytes.fromhex([c for c in codons if c['meta_data']['name'] == 'gc_stack_inverse'][0]['signature'])
+pgc = [c for c in codons if c['meta_data']['name'] == 'gc_stack_inverse'][0]
+pgc_signature = bytes.fromhex(pgc['signature'])
+gcs[pgc_signature] = LGC_json_load_entry_validator.normalized(pgc)
 
 for generation in trange(_NUM_GENERATIONS):
     # Create a new generation by stacking  GCs on top of one another
