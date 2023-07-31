@@ -21,7 +21,7 @@ from typing import Self
 from random import choice, randint
 from itertools import count
 
-from numpy import zeros, uint8, int32, double, array, argmax, argmin
+from numpy import zeros, uint8, int32, double, array, nanargmax, argmin, clip, ones, nan_to_num, where, full
 from numpy.linalg import norm
 from numpy.typing import NDArray
 
@@ -35,14 +35,14 @@ SOTU: int = 512  # Size of the universe in positions
 NUM_EFSTS: int = 10  # Number of EFSTs in the inital population
 MAX_NUM_EFSTS: int = 1000  # Maximum number of EFSTs in the universe
 THE_END = 255  # Value of the end position in the universe
+ONES: NDArray[double] = ones(MAX_NUM_EFSTS, dtype=double)
+OUTPUT = False
 
 
 # Universe set up
 universe: NDArray[uint8] = zeros((SOTU, SOTU), dtype=uint8)
 the_end: NDArray[int32] = array((SOTU // 2, SOTU // 2), dtype=int32)
 universe[*the_end] = THE_END
-idx = count()
-selection_fitness: NDArray[double] = zeros(MAX_NUM_EFSTS, dtype=double)
 position: NDArray[int32] = zeros((MAX_NUM_EFSTS, 2), dtype=int32)
 
 # EFST class
@@ -58,102 +58,137 @@ class EFST:
         self.idx: int = new_idx if new_idx < MAX_NUM_EFSTS else int(argmin(selection_fitness))
         self.position: NDArray[int32] = xy_position
         position[self.idx] = xy_position
-        self.fitness: double = self.fitness_function()
-        selection_fitness[self.idx] = self.fitness
-        self.evolvability = double(1.0)
+        fitness[self.idx] = self.fitness_function()
+        num_better_offspring[self.idx] = int32(1)
+        num_offspring[self.idx] = int32(1)
+        best_ancestor_gap[self.idx] = int32(-1)
         if parent is None:
             self.parent: Self = self
-            self.generation = 0
+            generation[self.idx] = int32(0)
+            best_ancestor_fitness[self.idx] = fitness[self.idx]
+            best_ancestor_generation[self.idx] = int32(0)
         else:
-            self.parent: Self = parent
-            self.generation = parent.generation + 1
+            self.parent = parent
+            generation[self.idx] = generation[parent.idx] + 1
+            best_ancestor_fitness[self.idx] = best_ancestor_fitness[parent.idx]
+            best_ancestor_generation[self.idx] = best_ancestor_generation[parent.idx]
+            if fitness[self.idx] > best_ancestor_fitness[parent.idx]:
+                best_ancestor_gap[self.idx] = generation[self.idx] - best_ancestor_generation[self.idx]
+                best_ancestor_fitness[self.idx] = fitness[self.idx]
+                best_ancestor_generation[self.idx] = generation[self.idx]
         self.offspring: list[Self] = []
 
     def __repr__(self) -> str:
         """Return a string representation of an EFST."""
-        return f"EFST: [x, y]: {self.position} f: {self.fitness:0.5f} s: {selection_fitness[self.idx]:0.5f} g: {self.generation} e: {self.evolvability:0.5f}, idx: {self.idx}"
+        return f"EFST: [x, y]: {self.position}, {len(self.offspring)} f: {fitness[self.idx]:0.5f} s: {selection_fitness[self.idx]:0.5f} g: {generation[self.idx]}, idx: {self.idx}, ggf: {generation_gap_factor[self.idx]:0.5f}, nof: {num_offspring_factor[self.idx]:0.5f}, nwof: {num_worse_offspring_factor[self.idx]:0.5f}"
 
     def breed(self) -> Self:
         """Create a new EFST from the current EFST."""
-        vertical: int = choice((-1, 1))
-        horizontal: int = choice((-1, 1))
-        new_position: NDArray[int32] = self.position + array((horizontal, vertical), dtype=int32)
+        global positive_e_count, total_e_count  # pylint: disable=global-statement
+        step: int = choice((-1, 1))
+        new_position: NDArray[int32] = self.position + choice((array((step, 0), dtype=int32), array((0, step), dtype=int32)))
         _new_efst: Self = EFST(new_position, self)
         self.offspring.append(_new_efst)
-        self.update_selection_fitness()
-        if len(self.offspring) > NUM_EFSTS:
-            evolvability = double((2*NUM_EFSTS - len(self.offspring)) / NUM_EFSTS)
-            self.update_evolvability(evolvability)
+
+        # Determine evolvability
+        if fitness[_new_efst.idx] > fitness[self.idx] and num_offspring[self.idx] > 1:
+            num_better_offspring[self.idx] += 1
+        num_offspring[self.idx] += 1
         return _new_efst
-
-    def update_parent_evolvability(self, evolvability: double = double(1.0)) -> None:
-        if self.parent is not self and len(self.parent.offspring) > NUM_EFSTS:
-            self.parent.update_parent_evolvability(evolvability / self.evolvability)
-        else:
-            for offspring in self.offspring:
-                offspring.update_evolvability(self.evolvability)
-
-    def update_evolvability(self, evolvability: double) -> None:
-        self.evolvability: double = self.evolvability * evolvability
-        for offspring in self.offspring:
-            offspring.update_evolvability(self.evolvability)
-        self.update_selection_fitness()
-        self.update_parent_evolvability()
-
-    def update_selection_fitness(self) -> None:
-        selection_fitness[self.idx] = self.fitness * self.evolvability
 
     def fitness_function(self) -> double:
         """Calculate the fitness of an EFST."""
         return 1 / (norm(self.position - the_end) + 1)
 
 
-
-fig, ax = plt.subplots(figsize=(10, 10))
-ax.set_xlim(0, SOTU)
-ax.set_ylim(0, SOTU)
-pp = ax.scatter(position[:,0], position[:, 1], marker='.', color='red', linewidth=0, animated=True)
-
-plt.show(block=False)
-bg = fig.canvas.copy_from_bbox(fig.bbox)
-# Create the initial population of EFSTs
-efsts: list[EFST] = [
-                        EFST(
-                            array(
-                                (
-                                    randint(SOTU - NUM_EFSTS - 1, SOTU - 1),
-                                    randint(SOTU - NUM_EFSTS - 1, SOTU - 1)
-                                ),
-                                dtype=int32
-                            )
-                        )
-                        for _ in range(NUM_EFSTS)
-                    ]
-
-# Breed the EFSTs
-ax.draw_artist(pp)
-fig.canvas.blit(fig.bbox)
-flag = False
-evolutions = count()
-
-while True:
-    fig.canvas.restore_region(bg)
-    pp.set_offsets(position)
+if OUTPUT:
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.set_xlim(0, SOTU)
+    ax.set_ylim(0, SOTU)
+    pp = ax.scatter(position[:,0], position[:, 1], marker='.', color='red', linewidth=0, animated=True)
+    plt.show(block=False)
+    bg = fig.canvas.copy_from_bbox(fig.bbox)
     ax.draw_artist(pp)
     fig.canvas.blit(fig.bbox)
-    fig.canvas.flush_events()
-    max_efst_idx = argmax(selection_fitness)
-    if selection_fitness[max_efst_idx] == 1.0:
-        break
-    print(efsts[max_efst_idx])
-    new_efst: EFST = efsts[max_efst_idx].breed()
-    if selection_fitness[new_efst.idx] == 0.5:
-        flag = True
-    print('New EFST: ', new_efst)
-    if len(efsts) < MAX_NUM_EFSTS:
-        efsts.append(new_efst)
-    else:
-        efsts[new_efst.idx] = new_efst
-    next(evolutions)
 
-print(f"Number of evolutions: {next(evolutions) - 1}")
+
+# Breed the EFSTs
+def shape_factor(values: NDArray[double] | NDArray[int32], num: int32, av: double | None = None) -> NDArray[double]:
+    average: double = av if av is not None else values.sum() / num
+    if average == 0.0:
+        return ONES
+    factor: NDArray[double] = average / values
+    return where(factor < 0.5, factor + 0.5, 1.0)
+
+evo_list = []
+for epoch in range(3000 * (not OUTPUT) + 1):
+    idx = count()
+    selection_fitness: NDArray[double] = zeros(MAX_NUM_EFSTS, dtype=double)
+    fitness: NDArray[double] = zeros(MAX_NUM_EFSTS, dtype=double)
+    num_offspring: NDArray[int32] = zeros(MAX_NUM_EFSTS, dtype=int32)
+    num_better_offspring: NDArray[int32] = zeros(MAX_NUM_EFSTS, dtype=int32)
+    best_ancestor_fitness: NDArray[double] = ones(MAX_NUM_EFSTS, dtype=double)
+    best_ancestor_generation: NDArray[int32] = zeros(MAX_NUM_EFSTS, dtype=int32)
+    best_ancestor_gap: NDArray[int32] = full(MAX_NUM_EFSTS, -1, dtype=int32)
+    generation: NDArray[int32] = zeros(MAX_NUM_EFSTS, dtype=int32)
+    position = zeros((MAX_NUM_EFSTS, 2), dtype=int32)
+
+    # Create the initial population of EFSTs
+    evolutions = count()
+    efsts: list[EFST] = [
+                            EFST(
+                                array(
+                                    (
+                                        randint(SOTU - NUM_EFSTS - 1, SOTU - 1),
+                                        randint(SOTU - NUM_EFSTS - 1, SOTU - 1)
+                                    ),
+                                    dtype=int32
+                                )
+                            )
+                            for _ in range(NUM_EFSTS)
+                        ]
+
+    while True:
+        if OUTPUT:
+            fig.canvas.restore_region(bg)
+            pp.set_offsets(position)
+            ax.draw_artist(pp)
+            fig.canvas.blit(fig.bbox)
+            fig.canvas.flush_events()
+
+        valid = fitness > 0
+        num_valid = valid.sum()
+        generation_gap_factor: NDArray[double] = shape_factor(generation - best_ancestor_generation, num_valid, best_ancestor_gap[best_ancestor_gap > -1].mean())
+        num_offspring_factor: NDArray[double] = shape_factor(num_offspring, num_valid)
+        num_worse_offspring_factor: NDArray[double] = shape_factor(num_offspring - num_better_offspring, num_valid)
+
+        selection_fitness = fitness * generation_gap_factor * num_offspring_factor * num_worse_offspring_factor
+        
+        """positive_distance =  clip(nan_to_num(((generation - best_ancestor_generation).sum() / (fitness > 0).sum()) / (generation - best_ancestor_generation), nan=1.0), 0.0, 1.0)
+        average_offspring_ratio = nan_to_num(num_better_offspring.sum() / num_offspring.sum(), nan=1.0)
+        offspring_ratios = nan_to_num(num_better_offspring / num_offspring, nan=1.0)
+        #print(f"Average offspring ratio: {average_offspring_ratio}, Sum of offspring ratios: {offspring_ratios.sum()}")
+        #print(f"Sum of Positive distance: {positive_distance.sum()}, Sum of Fitness: {fitness.sum()}")
+        selection_fitness = fitness * positive_distance * clip(offspring_ratios / average_offspring_ratio, 0.0, 1.0)
+        """
+        max_efst_idx = nanargmax(selection_fitness)
+        max_efst_idx2 = nanargmax(fitness)
+        if fitness[max_efst_idx] == 1.0:
+            break
+        if OUTPUT:
+            print('Selection: ',efsts[max_efst_idx])
+            print('Best: ', efsts[max_efst_idx2])
+        new_efst: EFST = efsts[max_efst_idx].breed()
+        if len(efsts) < MAX_NUM_EFSTS:
+            efsts.append(new_efst)
+        else:
+            efsts[new_efst.idx] = new_efst
+        next(evolutions)
+
+    num_evo = next(evolutions) - 1
+    print(f"{epoch}: Number of evolutions: {num_evo}")
+    evo_list.append(num_evo)
+
+print(f"Average number of evolutions: {sum(evo_list) / len(evo_list)}")
+print(f"Max number of evolutions: {max(evo_list)}")
+print(f"Min number of evolutions: {min(evo_list)}")
