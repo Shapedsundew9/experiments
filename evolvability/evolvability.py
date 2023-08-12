@@ -36,7 +36,7 @@ NUM_EFSTS: int = 10  # Number of EFSTs in the inital population
 MAX_NUM_EFSTS: int = 1000  # Maximum number of EFSTs in the universe
 THE_END = 255  # Value of the end position in the universe
 ONES: NDArray[double] = ones(MAX_NUM_EFSTS, dtype=double)
-OUTPUT = False
+OUTPUT = True
 
 
 # Universe set up
@@ -44,6 +44,13 @@ universe: NDArray[uint8] = zeros((SOTU, SOTU), dtype=uint8)
 the_end: NDArray[int32] = array((SOTU // 2, SOTU // 2), dtype=int32)
 universe[*the_end] = THE_END
 position: NDArray[int32] = zeros((MAX_NUM_EFSTS, 2), dtype=int32)
+
+# Dead points
+dead_points_x: list[int] = [320] * 64
+dead_points_x.extend(range(320, 384))
+dead_points_y: list[int] = list(range(320, 384))
+dead_points_y.extend([320] * 64)
+universe[dead_points_x, dead_points_y] = 1
 
 # EFST class
 class EFST:
@@ -84,7 +91,6 @@ class EFST:
 
     def breed(self) -> Self:
         """Create a new EFST from the current EFST."""
-        global positive_e_count, total_e_count  # pylint: disable=global-statement
         step: int = choice((-1, 1))
         new_position: NDArray[int32] = self.position + choice((array((step, 0), dtype=int32), array((0, step), dtype=int32)))
         _new_efst: Self = EFST(new_position, self)
@@ -98,6 +104,8 @@ class EFST:
 
     def fitness_function(self) -> double:
         """Calculate the fitness of an EFST."""
+        if universe[tuple(self.position)] == 1:
+            return double(0.0)
         return 1 / (norm(self.position - the_end) + 1)
 
 
@@ -105,10 +113,14 @@ if OUTPUT:
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_xlim(0, SOTU)
     ax.set_ylim(0, SOTU)
-    pp = ax.scatter(position[:,0], position[:, 1], marker='.', color='red', linewidth=0, animated=True)
+    pp = ax.scatter(position[:,0], position[:, 1], marker='.', color='red', linewidth=1, animated=True)
+    te = ax.scatter([the_end[0]], [the_end[1]], marker='X', color='green', linewidth=1, animated=True)
+    dp = ax.scatter(dead_points_x, dead_points_y, marker='s', color='black', linewidth=1, animated=True)
     plt.show(block=False)
     bg = fig.canvas.copy_from_bbox(fig.bbox)
     ax.draw_artist(pp)
+    ax.draw_artist(te)
+    ax.draw_artist(dp)
     fig.canvas.blit(fig.bbox)
 
 
@@ -153,6 +165,8 @@ for epoch in range(3000 * (not OUTPUT) + 1):
             fig.canvas.restore_region(bg)
             pp.set_offsets(position)
             ax.draw_artist(pp)
+            ax.draw_artist(te)
+            ax.draw_artist(dp)
             fig.canvas.blit(fig.bbox)
             fig.canvas.flush_events()
 
