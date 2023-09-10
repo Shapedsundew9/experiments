@@ -1,5 +1,6 @@
 from matplotlib import use
-use('TkAgg')
+
+use("TkAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 

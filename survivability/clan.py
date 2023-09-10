@@ -9,31 +9,23 @@ from itertools import count
 N_BINS = 100000
 
 
-class hurlabbab():
-
+class hurlabbab:
     default_kwargs = {
-        'x': 0.0,
-        'y': 0.0,
-        'p': 1.0,
-        'd': 2*pi,
-        'ps': 0.2,
-        'ds': 0.2,
-        'ss': 0.1,
-        'f': 1.0,
-        's': 1.0,
-        'a': None,
-        'pg': 0
+        "x": 0.0,
+        "y": 0.0,
+        "p": 1.0,
+        "d": 2 * pi,
+        "ps": 0.2,
+        "ds": 0.2,
+        "ss": 0.1,
+        "f": 1.0,
+        "s": 1.0,
+        "a": None,
+        "pg": 0,
     }
-    _exclude = (
-        '__module__',
-        '__main__',
-        '__dict__',
-        '__weakref__',
-        '__doc__'
-    )
+    _exclude = ("__module__", "__main__", "__dict__", "__weakref__", "__doc__")
     idx_gen = count()
     fossil_record = []
-
 
     def __init__(self, **kwargs):
         """Define"""
@@ -45,7 +37,16 @@ class hurlabbab():
         hurlabbab.fossil_record.append(self)
 
     def __repr__(self):
-        return '\n'.join((k + ': ' + str(v) for k, v in self.__dict__.items() if k not in hurlabbab._exclude)) + '\n\n'
+        return (
+            "\n".join(
+                (
+                    k + ": " + str(v)
+                    for k, v in self.__dict__.items()
+                    if k not in hurlabbab._exclude
+                )
+            )
+            + "\n\n"
+        )
 
     def fuzz_power(self):
         """Scale the power by a random factor."""
@@ -71,10 +72,8 @@ class hurlabbab():
             ps=self.ps * self.fuzz_scale(),
             ds=self.ds * self.fuzz_scale(),
             a=self.id,
-            pg=pg
-
+            pg=pg,
         )
-
 
     def plot(self, show=False):
         """Create plot of the landscape feature."""
@@ -87,41 +86,43 @@ class hurlabbab():
         y = sin(d) * p
 
         # Direction Distribution Chart
-        ax1 = fig.add_subplot(2, 2, 1, title=f'Direction Distribution ds = {self.ds}')
+        ax1 = fig.add_subplot(2, 2, 1, title=f"Direction Distribution ds = {self.ds}")
         ax1.hist(d, bins=100)
-        ax1.set_xlabel('Radians')
-        ax1.set_ylabel(f'Count (Total = {N_BINS})')
+        ax1.set_xlabel("Radians")
+        ax1.set_ylabel(f"Count (Total = {N_BINS})")
 
         # Power Distribution Chart
-        ax2 = fig.add_subplot(2, 2, 2, title=f'Power Distribution ps = {self.ps}')
+        ax2 = fig.add_subplot(2, 2, 2, title=f"Power Distribution ps = {self.ps}")
         ax2.hist(p, bins=100)
-        ax2.set_xlabel('Distance')
-        ax2.set_ylabel(f'Count (Total = {N_BINS})')
+        ax2.set_xlabel("Distance")
+        ax2.set_ylabel(f"Count (Total = {N_BINS})")
         ax2.yaxis.tick_right()
         ax2.yaxis.set_label_position("right")
 
         # Bab Position Distribution Chart
-        ax3 = fig.add_subplot(2, 2, 3, title=f'Relative Bab Position Distribution from Parent X')
-        hb = ax3.hexbin(x, y, cmap='inferno')
-        ax3.plot([0.0], [0.0], marker='x', color='green')
-        ax3.set_xlabel('Distance')
-        ax3.set_ylabel('Distance')
+        ax3 = fig.add_subplot(
+            2, 2, 3, title=f"Relative Bab Position Distribution from Parent X"
+        )
+        hb = ax3.hexbin(x, y, cmap="inferno")
+        ax3.plot([0.0], [0.0], marker="x", color="green")
+        ax3.set_xlabel("Distance")
+        ax3.set_ylabel("Distance")
         cb = fig.colorbar(hb, ax=ax3)
-        cb.set_label(f'Count (Total = {N_BINS})')
+        cb.set_label(f"Count (Total = {N_BINS})")
 
         # Scale Distribution Chart
-        ax4 = fig.add_subplot(2, 2, 4, title=f'Scale Distribution s = {self.ss}')
+        ax4 = fig.add_subplot(2, 2, 4, title=f"Scale Distribution s = {self.ss}")
         ax4.hist(s, bins=100)
-        ax4.set_xlabel('Scale')
-        ax4.set_ylabel(f'Count (Total = {N_BINS})')
+        ax4.set_xlabel("Scale")
+        ax4.set_ylabel(f"Count (Total = {N_BINS})")
         ax4.yaxis.tick_right()
         ax4.yaxis.set_label_position("right")
 
-        fig.suptitle(f'Hurlabbab {self.id} Statistics', fontsize=18)
+        fig.suptitle(f"Hurlabbab {self.id} Statistics", fontsize=18)
         if show:
             plt.show()
         else:
-            plt.savefig('stats_' + self.id + '.png')
+            plt.savefig("stats_" + self.id + ".png")
 
 
 if __name__ == "__main__":

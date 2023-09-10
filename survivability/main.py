@@ -8,8 +8,9 @@ from numpy.random import choice
 
 l = mountain_domain()
 p = population(cr=l.x_max, n=20)
-#l = mountain_cluster()
-#p = population(cx=l.x_min * 0.9, cy=l.y_min * 0.9)
+# l = mountain_cluster()
+# p = population(cx=l.x_min * 0.9, cy=l.y_min * 0.9)
+
 
 def ff(i, p):
     # FIXME: Calculate fitness at the population layer.
@@ -19,12 +20,13 @@ def ff(i, p):
         i.f = -l.function(i.x, i.y)
     return i
 
+
 def sf(p):
     # FIXME: Treat survivability at the population layer.
     if len(p) > p.n:
         s = array([i.f for i in p])
         idx = argsort(s)
-        top = int(p.n/4)
+        top = int(p.n / 4)
         best_idx = idx[-top:]
         best = [p[i] for i in best_idx]
         s = s - s.min()
@@ -37,13 +39,14 @@ def sf(p):
         best.extend(rest)
         return best
     return p
+
 
 def sf_gradient(p):
     # FIXME: Treat survivability at the population layer.
     if len(p) > p.n:
         s = array([i.f for i in p])
         idx = argsort(s)
-        top = int(p.n/4)
+        top = int(p.n / 4)
         best_idx = idx[-top:]
         best = [p[i] for i in best_idx]
         s = s - s.min()
@@ -57,38 +60,51 @@ def sf_gradient(p):
         return best
     return p
 
+
 p.set_ff(ff)
 p.set_sf(sf)
 show = True
 
 sz = 8 if show else 20
-fig, axs = plt.subplot_mosaic([['map','map', 'fitness'], ['map', 'map', 'generation']], figsize=(int(sz * 1.75), sz))
+fig, axs = plt.subplot_mosaic(
+    [["map", "map", "fitness"], ["map", "map", "generation"]],
+    figsize=(int(sz * 1.75), sz),
+)
 
-ax1 = axs['map']
-tt = ax1.set_title(f'Generation {p.g}: Max Fitness {p.bf}', animated=True)
-cf = ax1.contourf(l.xx, l.yy, l.zz, cmap='terrain')
-pp = ax1.scatter([i.x for i in p], [i.y for i in p], marker='o', color='red', linewidth=0, animated=True)
+ax1 = axs["map"]
+tt = ax1.set_title(f"Generation {p.g}: Max Fitness {p.bf}", animated=True)
+cf = ax1.contourf(l.xx, l.yy, l.zz, cmap="terrain")
+pp = ax1.scatter(
+    [i.x for i in p],
+    [i.y for i in p],
+    marker="o",
+    color="red",
+    linewidth=0,
+    animated=True,
+)
 cb = fig.colorbar(cf, ax=ax1)
 
-ax2 = axs['fitness']
-(bf, ) = ax2.plot(p.bg, p.bf, color='green', animated=True)
-(wf, ) = ax2.plot(p.bg, p.wf, color='red', animated=True)
-(mf, ) = ax2.plot(p.bg, p.mf, color='black', linestyle=':', animated=True)
+ax2 = axs["fitness"]
+(bf,) = ax2.plot(p.bg, p.bf, color="green", animated=True)
+(wf,) = ax2.plot(p.bg, p.wf, color="red", animated=True)
+(mf,) = ax2.plot(p.bg, p.mf, color="black", linestyle=":", animated=True)
 ax2.set_xlim((0, 500))
 ax2.set_ylim((0, max(l.zz) * 1.1))
-ax2.set_title('Live Population Fitness')
-ax2.set_xlabel('Generation')
-ax2.set_ylabel('Fitness')
+ax2.set_title("Live Population Fitness")
+ax2.set_xlabel("Generation")
+ax2.set_ylabel("Fitness")
 
-ax3 = axs['generation']
-(lg, ) = ax3.plot(p.bg, array(p.bg) - array(p.lg), color='red', animated=True)
-(mg, ) = ax3.plot(p.bg, array(p.bg) - array(p.mg), color='black', linestyle=':', animated=True)
+ax3 = axs["generation"]
+(lg,) = ax3.plot(p.bg, array(p.bg) - array(p.lg), color="red", animated=True)
+(mg,) = ax3.plot(
+    p.bg, array(p.bg) - array(p.mg), color="black", linestyle=":", animated=True
+)
 ax3.set_xlim((0, 500))
 ax3.set_ylim((0, 200))
-#ax3.set_yscale('log')
-ax3.set_title('Live Population Generations')
-ax3.set_xlabel('Generation')
-ax3.set_ylabel('Relative Generation')
+# ax3.set_yscale('log')
+ax3.set_title("Live Population Generations")
+ax3.set_xlabel("Generation")
+ax3.set_ylabel("Relative Generation")
 
 plt.show(block=False)
 bg = fig.canvas.copy_from_bbox(fig.bbox)
@@ -106,7 +122,7 @@ fig.canvas.blit(fig.bbox)
 
 while not p.breed():
     fig.canvas.restore_region(bg)
-    tt.set_text(f'Generation {p.g}: Max Fitness {p.bf[-1]:0.3}')
+    tt.set_text(f"Generation {p.g}: Max Fitness {p.bf[-1]:0.3}")
     pp.set_offsets(tuple(zip([i.x for i in p], [i.y for i in p])))
     ax1.draw_artist(tt)
     ax1.draw_artist(pp)
@@ -131,4 +147,4 @@ while not p.breed():
     fig.canvas.blit(fig.bbox)
     fig.canvas.flush_events()
 
-x=input('Done: Hit Enter')
+x = input("Done: Hit Enter")

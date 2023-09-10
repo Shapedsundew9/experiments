@@ -2,19 +2,19 @@ from numpy import zeros, ones, float32, exp, array, concatenate, newaxis, empty
 from numpy.random import default_rng
 from tqdm import tqdm
 from matplotlib import use
-use('GTK3Cairo')
-import matplotlib.figure as figure 
+
+use("GTK3Cairo")
+import matplotlib.figure as figure
 
 
 # Master Scaling Parameter
 _MSP = 0.1
 
 
-class hurlabbabs():
-
+class hurlabbabs:
     def __init__(self, fitness_function, num_param, size=100):
         """Initialise the Hurlabbab population.
-        
+
         Args
         ----
         fitness_function (callable): Takes a single numpy array of shape shape.
@@ -37,13 +37,15 @@ class hurlabbabs():
         self.position = zeros(self.vector_shape, dtype=float32)
 
         # Initialise hurling parameters
-        # Babs are hurled along a vector that adjusts in magnitude and direction 
+        # Babs are hurled along a vector that adjusts in magnitude and direction
         self.magnitude_scale = self.fuzz(self.size)
         self.direction_scale = self.fuzz(self.size)
         self.vector = self._rng.uniform(-1.0, 1.0, size=self.vector_shape)
 
         # Calculating fitness from vector as position is 0.0
-        self.fitness = array(tuple(map(self.fitness_function, self.vector)), dtype=float32)
+        self.fitness = array(
+            tuple(map(self.fitness_function, self.vector)), dtype=float32
+        )
 
     def fuzz(self, size, scale=_MSP):
         """Create a scaling vector for the population."""
@@ -51,13 +53,13 @@ class hurlabbabs():
 
     def survivors(self, bab_position, bab_fitness):
         """Determine the survivors from the current population and the new babs.
-        
+
         Args
         ----
         bab_position (ndarray): Same as self.position but for the new babs.
         bab_fitness (array(float32)): Fitness of each bab. Same length as first
             bab_position dimensions.
-        
+
         Returns
         -------
         (array(bool), array(bool)): Mask of the survivors (True) in the current population
@@ -70,7 +72,7 @@ class hurlabbabs():
         survivors = self._rng.choice(self.size * 2, self.size, False, weights)
         mask = zeros((self.size * 2,), dtype=bool)
         mask[survivors] = True
-        return mask[:self.size], mask[self.size:]
+        return mask[: self.size], mask[self.size :]
 
     def evolve(self):
         """Hurl a Bab.
@@ -87,8 +89,15 @@ class hurlabbabs():
 
         TODO: This saves fuzzing the parent values again but how does it influence the evolutionary path?
         """
-        bab_direction_scale, bab_magnitude_scale, bab_vector, bab_position = self.reproduce()
-        bab_fitness = array(tuple(map(self.fitness_function, bab_position)), dtype=float32)
+        (
+            bab_direction_scale,
+            bab_magnitude_scale,
+            bab_vector,
+            bab_position,
+        ) = self.reproduce()
+        bab_fitness = array(
+            tuple(map(self.fitness_function, bab_position)), dtype=float32
+        )
 
         # Selection
         p_mask, b_mask = self.survivors(bab_position, bab_fitness)
@@ -112,15 +121,18 @@ class hurlabbabs():
         """
         bab_direction_scale = self.direction_scale * self.fuzz(self.size)
         bab_magnitude_scale = self.magnitude_scale * self.fuzz(self.size)
-        bab_vector = (self.vector + self._rng.uniform(-1.0, 1.0, size=self.vector_shape)
-            * bab_direction_scale[:, newaxis]) * bab_magnitude_scale[:, newaxis]
+        bab_vector = (
+            self.vector
+            + self._rng.uniform(-1.0, 1.0, size=self.vector_shape)
+            * bab_direction_scale[:, newaxis]
+        ) * bab_magnitude_scale[:, newaxis]
         bab_position = self.position + bab_vector
         return bab_direction_scale, bab_magnitude_scale, bab_vector, bab_position
 
 
 def _bab_burst():
     """Visual validation of Hurlabbab behviour.
-    
+
     This method generates sequences of 2D images of Hurlabbab positions
     in a 2D space using specific parameters for visual validation.
 
@@ -143,9 +155,9 @@ def _bab_burst():
     In general the results show generations positions being closer to gen 0 with
     reducing magnitude scale and more tightly clustered with reducing direction scale.
     Thus, high magnitude scale and high direction scale (top, left) results in a
-    broad cluster of gen 1 babs centred on the gen 0 vector end position. e.g. if 
+    broad cluster of gen 1 babs centred on the gen 0 vector end position. e.g. if
     the gen0 vector is 0, 0 then gen 1 is distributed broadly around the gen 0 position.
-    Low magnitude scale draws the gen 1 cluster closer to gen 0 and low direction scale 
+    Low magnitude scale draws the gen 1 cluster closer to gen 0 and low direction scale
     tightens the cluster. In the bottom right corner of the figure gen 1 is pretty
     much on top of gen 0.
 
@@ -157,7 +169,7 @@ def _bab_burst():
     gen_1 = hurlabbabs(lambda x: 1, 2, 100)
     gen_0.position = zeros((gen_0.size, 2), dtype=float32)
     gen_0.vector = empty((gen_0.size, 2), dtype=float32)
-    for vector in tqdm(((0, 0), (1, 1), (-1, 1), (-1, -1), (1, -1)), desc='Plotting'):
+    for vector in tqdm(((0, 0), (1, 1), (-1, 1), (-1, -1), (1, -1)), desc="Plotting"):
         fig = figure.Figure(figsize=(12.0, 12.0))
         axs = fig.subplots(8, 8, sharex=True, sharey=True)
         gen_0.vector[:, 0] = vector[0]
@@ -166,19 +178,45 @@ def _bab_burst():
             for ds in range(8):
                 gen_0.magnitude_scale = ones((gen_0.size,), dtype=float32) / (ms + 1)
                 gen_0.direction_scale = ones((gen_0.size,), dtype=float32) / (ds + 1)
-                gen_1.direction_scale, gen_1.magnitude_scale, gen_1.vector, gen_1.position = gen_0.reproduce()
-                axs[ds, ms].scatter(gen_1.position[:,0], gen_1.position[:,1], marker='.', color='royalblue')
+                (
+                    gen_1.direction_scale,
+                    gen_1.magnitude_scale,
+                    gen_1.vector,
+                    gen_1.position,
+                ) = gen_0.reproduce()
+                axs[ds, ms].scatter(
+                    gen_1.position[:, 0],
+                    gen_1.position[:, 1],
+                    marker=".",
+                    color="royalblue",
+                )
                 gen_1.direction_scale[:] = gen_1.direction_scale[0]
                 gen_1.magnitude_scale[:] = gen_1.magnitude_scale[0]
-                gen_1.vector[:] = gen_1.vector[0,:]
-                gen_1.position[:] = gen_1.position[0,:]
+                gen_1.vector[:] = gen_1.vector[0, :]
+                gen_1.position[:] = gen_1.position[0, :]
                 _, __, ___, gen_2_position = gen_1.reproduce()
-                axs[ds, ms].scatter(gen_2_position[:,0], gen_2_position[:,1], marker='.', color='lightskyblue')
-                axs[ds, ms].scatter(gen_0.position[:,0], gen_0.position[:,1], marker='.', color='firebrick')
-                axs[ds, ms].scatter(gen_1.position[:,0], gen_1.position[:,1], marker='.', color='lightcoral')
+                axs[ds, ms].scatter(
+                    gen_2_position[:, 0],
+                    gen_2_position[:, 1],
+                    marker=".",
+                    color="lightskyblue",
+                )
+                axs[ds, ms].scatter(
+                    gen_0.position[:, 0],
+                    gen_0.position[:, 1],
+                    marker=".",
+                    color="firebrick",
+                )
+                axs[ds, ms].scatter(
+                    gen_1.position[:, 0],
+                    gen_1.position[:, 1],
+                    marker=".",
+                    color="lightcoral",
+                )
                 axs[ds, ms].label_outer()
         fig.tight_layout()
-        fig.savefig('bab_burst_' + str(vector[0]) + str(vector[1]) + '.png')
+        fig.savefig("bab_burst_" + str(vector[0]) + str(vector[1]) + ".png")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     _bab_burst()

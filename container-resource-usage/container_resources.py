@@ -21,18 +21,28 @@ def actualsize(input_obj):
         objects = gc.get_referents(*new)
     return memory_size
 
+
 def deltasize(input_obj, size):
     return actualsize(input_obj) - size
 
+
 COUNT = 1000000
 
-class empty():
 
+class empty:
     def __init__(self):
         pass
 
 
-class small():
+class small:
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+class slotted_small:
+    __slots__ = ("x", "y", "z")
 
     def __init__(self, x, y, z):
         self.x = x
@@ -40,17 +50,7 @@ class small():
         self.z = z
 
 
-class slotted_small():
-
-    __slots__ = ('x', 'y', 'z')
-
-    def __init__(self, x, y, z):
-        self.x = x
-        self.y = y
-        self.z = z
-
-
-named = namedtuple('Bill', ('x', 'y', 'z'))
+named = namedtuple("Bill", ("x", "y", "z"))
 
 
 _empty = empty()
@@ -59,9 +59,9 @@ print(sys.getsizeof(400))
 print(sys.getsizeof(400000))
 print(sys.getsizeof(4000000000))
 base_size = actualsize(_empty)
-print(f'Size of empty() = {actualsize(_empty)}')
-_tuple = [(i, i+1, i+2) for i in range(100000)]
-print(f'Size of tuple(int, int, int) = {deltasize(_tuple, base_size)}')
+print(f"Size of empty() = {actualsize(_empty)}")
+_tuple = [(i, i + 1, i + 2) for i in range(100000)]
+print(f"Size of tuple(int, int, int) = {deltasize(_tuple, base_size)}")
 
 
 """

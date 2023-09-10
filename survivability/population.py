@@ -6,17 +6,15 @@ from functools import partial
 from copy import deepcopy
 
 
-_STAT_BODY = {
-    'values': [],
-    'function': None
-}
+_STAT_BODY = {"values": [], "function": None}
 
 _STATS_BODY = {
-    'max': deepcopy(_STAT_BODY),
-    'min': deepcopy(_STAT_BODY),
-    'mean': deepcopy(_STAT_BODY),
-    'data': None
+    "max": deepcopy(_STAT_BODY),
+    "min": deepcopy(_STAT_BODY),
+    "mean": deepcopy(_STAT_BODY),
+    "data": None,
 }
+
 
 def _fitness_function(population_data):
     """Template fitness function.
@@ -30,6 +28,7 @@ def _fitness_function(population_data):
     fitness (ndarray): Shape (*,)
     """
     raise NotImplementedError
+
 
 def initialize(size, narg_lim):
     """Default function for initializing Hurlabbab arguments.
@@ -53,21 +52,20 @@ def initialize(size, narg_lim):
     return arg
 
 
-class population():
-
+class population:
     default_kwargs = {
-        'crash_radius': 1.0,
-        'crash_x': 0.0,
-        'crash_y': 0.0,
-        'generation': 0,
-        'generation_limit': 500,
-        'fitness_function': _fitness_function,
-        'stats': {
-            'fitness': deepcopy(_STATS_BODY),
-            'generation': deepcopy(_STATS_BODY)
+        "crash_radius": 1.0,
+        "crash_x": 0.0,
+        "crash_y": 0.0,
+        "generation": 0,
+        "generation_limit": 500,
+        "fitness_function": _fitness_function,
+        "stats": {
+            "fitness": deepcopy(_STATS_BODY),
+            "generation": deepcopy(_STATS_BODY),
         },
-        'tolerence': 1e-38,
-        'done': False
+        "tolerence": 1e-38,
+        "done": False,
     }
 
     def __init__(self, fitness_function, args, **kwargs):
@@ -80,9 +78,8 @@ class population():
         self.generation = zeros((self.size,), dtype=int32)
         self.clan = zeros((self.size,), dtype=int32)
         self.survivability = empty((self.size,), dtype=float32)
-        self.stats['fitness']['data'] = self.fitness
-        self.stats['generation']['data'] = self.fitness
-
+        self.stats["fitness"]["data"] = self.fitness
+        self.stats["generation"]["data"] = self.fitness
 
     def survival_function(self):
         return self.fitness
@@ -103,12 +100,13 @@ class population():
     def breed(self, show=False, save=False):
         self.g += 1
         self.extend([self.ff(i.hurl(self.g)) for i in self])
-        survivors = sorted(self.sf(), key=lambda x:x.f, reverse=True)
+        survivors = sorted(self.sf(), key=lambda x: x.f, reverse=True)
         self.clear()
         self.extend(survivors)
         self.stats()
         self.done = self.done or self.g >= self.gl
-        if show or save: self.plot(show)
+        if show or save:
+            self.plot(show)
         return self.done
 
     def plot(self, show=False):
@@ -116,39 +114,51 @@ class population():
         fig = plt.figure(figsize=(sz, sz))
 
         # Spatial Distribution Chart
-        ax1 = fig.add_subplot(2, 2, 1, title=f'Spatial Distribution (Total {self.n})')
-        ax1.scatter([i.x for i in self], [i.y for i in self], marker='o', color='red')
-        ax1.set_xlabel('x')
-        ax1.set_ylabel('y')
+        ax1 = fig.add_subplot(2, 2, 1, title=f"Spatial Distribution (Total {self.n})")
+        ax1.scatter([i.x for i in self], [i.y for i in self], marker="o", color="red")
+        ax1.set_xlabel("x")
+        ax1.set_ylabel("y")
 
         # Power Distribution Chart
-        ax2 = fig.add_subplot(2, 2, 2, title=f'Power Distribution')
+        ax2 = fig.add_subplot(2, 2, 2, title=f"Power Distribution")
         ax2.hist([i.p for i in self], bins=min((100, int(self.n / 10))))
-        ax2.set_xlabel('Individual Power')
-        ax2.set_ylabel(f'Count (Total = {self.n})')
+        ax2.set_xlabel("Individual Power")
+        ax2.set_ylabel(f"Count (Total = {self.n})")
         ax2.yaxis.tick_right()
         ax2.yaxis.set_label_position("right")
 
         # Direction Distribution Chart
-        ax3 = fig.add_subplot(2, 2, 3, title=f'Direction Distribution')
+        ax3 = fig.add_subplot(2, 2, 3, title=f"Direction Distribution")
         ax3.hist([i.d for i in self], bins=min((100, int(self.n / 10))))
-        ax3.set_xlabel('Individual Direction')
-        ax3.set_ylabel(f'Count (Total = {self.n})')
+        ax3.set_xlabel("Individual Direction")
+        ax3.set_ylabel(f"Count (Total = {self.n})")
 
         # Scale Distribution Chart
-        ax4 = fig.add_subplot(2, 2, 4, title=f'Scale Distribution')
-        ax4.hist([i.ps for i in self], bins=min((100, int(self.n / 10))), color='blue', alpha=0.5)
-        ax4.hist([i.ds for i in self], bins=min((100, int(self.n / 10))), color='red', alpha=0.5)
-        ax4.set_xlabel('Direction/Power Scale')
-        ax4.set_ylabel(f'Count (Total = {self.n})')
+        ax4 = fig.add_subplot(2, 2, 4, title=f"Scale Distribution")
+        ax4.hist(
+            [i.ps for i in self],
+            bins=min((100, int(self.n / 10))),
+            color="blue",
+            alpha=0.5,
+        )
+        ax4.hist(
+            [i.ds for i in self],
+            bins=min((100, int(self.n / 10))),
+            color="red",
+            alpha=0.5,
+        )
+        ax4.set_xlabel("Direction/Power Scale")
+        ax4.set_ylabel(f"Count (Total = {self.n})")
         ax4.yaxis.tick_right()
         ax4.yaxis.set_label_position("right")
 
-        fig.suptitle(f'Hurlabbab Population Generation {self.g} Statistics', fontsize=18)
+        fig.suptitle(
+            f"Hurlabbab Population Generation {self.g} Statistics", fontsize=18
+        )
         if show:
             plt.show()
         else:
-            plt.savefig(f'population_gen_{self.g}.png')
+            plt.savefig(f"population_gen_{self.g}.png")
             plt.close()
 
 
